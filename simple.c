@@ -68,7 +68,7 @@ static long simple_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	revision = *((uint32_t *)buffer_area);
 	switch (cmd) {
 	case 0x11: 
-		put_user(vmcs_readl(VIRTUAL_PROCESSOR_ID), (uint *)arg);
+		put_user(vmcs_readl(HOST_RIP), (uint *)arg);
 		break;
 	case 0x12:
 		put_user(vmcs_readl(EXCEPTION_BITMAP),(uint *)arg);
