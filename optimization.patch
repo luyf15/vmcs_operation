@@ -1,0 +1,145 @@
+diff --git a/Makefile b/Makefile
+index d4d36c619..f583e6e6a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -801,6 +801,12 @@ endif
+ KBUILD_CFLAGS += $(DEBUG_CFLAGS)
+ export DEBUG_CFLAGS
+ 
++ifdef CONFIG_NO_AUTO_INLINE
++KBUILD_CFLAGS   += $(call cc-option, -fno-inline-functions) \
++           $(call cc-option, -fno-inline-small-functions) \
++           $(call cc-option, -fno-inline-functions-called-once)
++endif
++
+ ifdef CONFIG_FUNCTION_TRACER
+ ifdef CONFIG_FTRACE_MCOUNT_RECORD
+   # gcc 5 supports generating the mcount tables directly
+diff --git a/arch/x86/include/asm/pgtable_64.h b/arch/x86/include/asm/pgtable_64.h
+index 0b6c40429..a0ced3925 100644
+--- a/arch/x86/include/asm/pgtable_64.h
++++ b/arch/x86/include/asm/pgtable_64.h
+@@ -16,7 +16,9 @@
+ #include <linux/threads.h>
+ #include <asm/fixmap.h>
+ 
++#ifdef CONFIG_X86_5LEVEL
+ extern p4d_t level4_kernel_pgt[512];
++#endif
+ extern p4d_t level4_ident_pgt[512];
+ extern pud_t level3_kernel_pgt[512];
+ extern pud_t level3_ident_pgt[512];
+diff --git a/arch/x86/kernel/head64.c b/arch/x86/kernel/head64.c
+index 206a4b614..fcb4e4915 100644
+--- a/arch/x86/kernel/head64.c
++++ b/arch/x86/kernel/head64.c
+@@ -151,16 +151,15 @@ unsigned long __head __startup_64(unsigned long physaddr,
+ 
+     pgd = fixup_pointer(&early_top_pgt, physaddr);
+     p = pgd + pgd_index(__START_KERNEL_map);
+-    if (la57)
+-        *p = (unsigned long)level4_kernel_pgt;
+-    else
+-        *p = (unsigned long)level3_kernel_pgt;
+-    *p += _PAGE_TABLE_NOENC - __START_KERNEL_map + load_delta;
+-
++#ifdef CONFIG_X86_5LEVEL
+     if (la57) {
++        *p = (unsigned long)level4_kernel_pgt;
+         p4d = fixup_pointer(&level4_kernel_pgt, physaddr);
+         p4d[511] += load_delta;
+-    }
++    } else
++#endif
++        *p = (unsigned long)level3_kernel_pgt;
++    *p += _PAGE_TABLE_NOENC - __START_KERNEL_map + load_delta;
+ 
+     pud = fixup_pointer(&level3_kernel_pgt, physaddr);
+     pud[510] += load_delta;
+diff --git a/drivers/regulator/internal.h b/drivers/regulator/internal.h
+index 83ae442f5..a7d4babed 100644
+--- a/drivers/regulator/internal.h
++++ b/drivers/regulator/internal.h
+@@ -59,7 +59,6 @@ struct regulator_init_data *regulator_of_get_init_data(struct device *dev,
+                      const struct regulator_desc *desc,
+                  struct regulator_config *config,
+                  struct device_node **node);
+-
+ struct regulator_dev *of_parse_coupled_regulator(struct regulator_dev *rdev,
+                          int index);
+ 
+diff --git a/include/asm-generic/fixmap.h b/include/asm-generic/fixmap.h
+index 8cc7b09c1..171c6fa24 100644
+--- a/include/asm-generic/fixmap.h
++++ b/include/asm-generic/fixmap.h
+@@ -29,7 +29,8 @@
+  */
+ static __always_inline unsigned long fix_to_virt(const unsigned int idx)
+ {
+-    BUILD_BUG_ON(idx >= __end_of_fixed_addresses);
++    BUILD_BUG_ON(__builtin_constant_p(idx) &&
++             idx >= __end_of_fixed_addresses);
+     return __fix_to_virt(idx);
+ }
+ 
+diff --git a/include/linux/compiler-gcc.h b/include/linux/compiler-gcc.h
+index d7ee4c6ba..5ee53b3e5 100644
+--- a/include/linux/compiler-gcc.h
++++ b/include/linux/compiler-gcc.h
+@@ -72,8 +72,10 @@
+ 
+ #define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
+ 
++#if !defined(__CHECKER__) && !defined(CONFIG_DEBUG_EXPERIENCE)
+ #define __compiletime_warning(message) __attribute__((__warning__(message)))
+ #define __compiletime_error(message) __attribute__((__error__(message)))
++#endif /* __CHECKER__ */
+ 
+ #if defined(LATENT_ENTROPY_PLUGIN) && !defined(__CHECKER__)
+ #define __latent_entropy __attribute__((latent_entropy))
+diff --git a/lib/Kconfig.debug b/lib/Kconfig.debug
+index 93d97f9b0..3efebfe25 100644
+--- a/lib/Kconfig.debug
++++ b/lib/Kconfig.debug
+@@ -239,6 +239,40 @@ config GDB_SCRIPTS
+       instance. See Documentation/dev-tools/gdb-kernel-debugging.rst
+       for further details.
+ 
++config NO_AUTO_INLINE
++    bool "Disable compiler atuo-inline optimizations"
++    default n
++    help
++      This will make compiler not auto-inline kernel functions for
++      optimization. By enabling this option, all the kernel functions
++      (including static ones) will not be optimized out except those
++      marked as inline or always_inline. This is useful when you are
++      using ftrace to understand the control flow of kernel code or
++      tracing some static functions.
++
++      Use only if you want to debug the kernel.
++
++config DEBUG_EXPERIENCE
++    bool "Optimize for better debugging experience (-Og)"
++    default n
++    select NO_AUTO_INLINE
++    depends on !CC_OPTIMIZE_FOR_SIZE
++    help
++      This will apply GCC `-Og` optimization level get supported from
++      GCC 4.8. This optimization level offers a reasonable level of
++      optimization while maintaining fast compilation and a good
++      debugging experience. It is similar to `-O1` while perfer keeping
++      debug ability over runtime speed. The overall performance will
++      drop a bit.
++
++      If enabling this option break your kernel, you should either
++      disable this or find a fix (mostly in the arch code). Currently
++      this option has only be tested in qemu x86_64 guest.
++
++      Use only if you want to debug the kernel, especially if you want
++      to have better kernel debugging experience with gdb facilities
++      like kgdb and qemu.
++
+ config ENABLE_MUST_CHECK
+     bool "Enable __must_check logic"
+     default y
+
