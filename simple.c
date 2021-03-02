@@ -74,10 +74,22 @@ static long simple_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		put_user(vmcs_readl(EXCEPTION_BITMAP),(uint *)arg);
 		break;
 	case 0x13:
-		put_user(vmcs_writel(EXCEPTION_BITMAP,0xffffffff),(uint *)arg);
+		put_user(vmcs_writel(EXCEPTION_BITMAP,0x00ff00ff),(uint *)arg);
 		break;
 	case 0x14:
 		put_user(vmcs_readl(PIN_BASED_VM_EXEC_CONTROL),(uint *)arg);
+		break;
+	case 0x15:
+		put_user(vmcs_readl(CPU_BASED_VM_EXEC_CONTROL),(uint *)arg);
+		break;
+	case 0x16:
+		put_user(vmcs_readl(SECONDARY_VM_EXEC_CONTROL),(uint *)arg);
+		break;
+	case 0x17:
+		put_user(vmcs_readl(CR0_GUEST_HOST_MASK),(uint *)arg);
+		break;
+	case 0x18:
+		put_user(vmcs_readl(CR0_READ_SHADOW),(uint *)arg);
 		break;
 	default:
 		return -EFAULT;
