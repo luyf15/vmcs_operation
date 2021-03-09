@@ -12,6 +12,7 @@
 #include <linux/pagemap.h>
 #include <linux/slab.h>
 #include <asm/vmx.h>
+#include "simple.h"
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("A Simple module");
@@ -64,32 +65,17 @@ static unsigned long vmcs_readl(unsigned long field)
 static long simple_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	uint32_t revision;
-	
 	revision = *((uint32_t *)buffer_area);
+
+	struct para tmp;
+	if(copy_from_user(&tmp,(pctl)arg,sizeof(ctl)))return -EFAULT;
+
 	switch (cmd) {
-	case 0x11: 
-		put_user(vmcs_readl(HOST_RIP), (uint *)arg);
+	case VMREAD: 
+		put_user(vmcs_readl(tmp.field), (unsigned long *)(tmp.out_data));
 		break;
-	case 0x12:
-		put_user(vmcs_readl(EXCEPTION_BITMAP),(uint *)arg);
-		break;
-	case 0x13:
-		put_user(vmcs_writel(EXCEPTION_BITMAP,0x00ff00ff),(uint *)arg);
-		break;
-	case 0x14:
-		put_user(vmcs_readl(PIN_BASED_VM_EXEC_CONTROL),(uint *)arg);
-		break;
-	case 0x15:
-		put_user(vmcs_readl(CPU_BASED_VM_EXEC_CONTROL),(uint *)arg);
-		break;
-	case 0x16:
-		put_user(vmcs_readl(SECONDARY_VM_EXEC_CONTROL),(uint *)arg);
-		break;
-	case 0x17:
-		put_user(vmcs_readl(CR0_GUEST_HOST_MASK),(uint *)arg);
-		break;
-	case 0x18:
-		put_user(vmcs_readl(CR0_READ_SHADOW),(uint *)arg);
+	case VMWRITE:
+		put_user(vmcs_writel(tmp.field,tmp.in_data),(unsigned long *)(tmp.out_data));
 		break;
 	default:
 		return -EFAULT;

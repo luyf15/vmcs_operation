@@ -5,60 +5,50 @@
 #include <string.h>
 #include <stdint.h>
 #include <fcntl.h>
+#include "simple.h"
 
-unsigned int tmp=0U;
+static unsigned long tmp = 0U;
 
 int main()
 {
-	int simple=open("/dev/simple",O_RDWR);
+	struct para *contain=malloc(sizeof(struct para));
+	contain->out_data = &tmp;
+	contain->in_data = 0U;
+	contain->field = 0U;
 
-	if(simple<0){
+	int simple = open("/dev/simple",O_RDWR);
+
+	if(simple < 0){
 		perror("open /dev/simple");
 		exit(1);	
 	}
-	if(ioctl(simple,0x11,&tmp)<0){
-		perror("read Guest cr3");
+
+	contain->field = GUEST_CR0;
+	if(ioctl(simple,VMREAD,contain) < 0){
+		perror("read Guest cr0");
 		exit(1);
 	}
-	printf("Guest cr3:%x\n",tmp);
-	if(ioctl(simple,0x12,&tmp)<0){
+	printf("Guest cr0:%lx\n",*(contain->out_data));
+
+	contain->field = EXCEPTION_BITMAP;
+	if(ioctl(simple,VMREAD,contain)<0){
 		perror("read Exception Bitmap");
 		exit(1);
 	}
-	printf("Exception bitmap:%x\n",tmp);
-	if(ioctl(simple,0x13,&tmp)<0){
+	printf("Exception bitmap:%lx\n",*(contain->out_data));
+
+	contain->in_data = 0xffffffff;
+	if(ioctl(simple,VMWRITE,contain)<0){
 		perror("write Exception Bitmap");
 		exit(1);
 	}
-	if(ioctl(simple,0x12,&tmp)<0){
+	if(ioctl(simple,VMREAD,contain)<0){
 		perror("read Exception Bitmap");
 		exit(1);
 	}
-	printf("Exception bitmap:%x\n",tmp);
-	if(ioctl(simple,0x14,&tmp)<0){
-		perror("read PIN BASED");
-		exit(1);
-	}
-	printf("PIN_BASED_VM_EXEC_CONTROL:%x\n",tmp);
-	if(ioctl(simple,0x15,&tmp)<0){
-		perror("read CPU BASED");
-		exit(1);
-	}
-	printf("CPU_BASED_VM_EXEC_CONTROL:%x\n",tmp);
-	if(ioctl(simple,0x16,&tmp)<0){
-		perror("read SECONDARY");
-		exit(1);
-	}
-	printf("SECONDARY_VM_EXEC_CONTROL:%x\n",tmp);
-	if(ioctl(simple,0x17,&tmp)<0){
-		perror("read cr0 G/H");
-		exit(1);
-	}
-	printf("CR0 GUEST HOST MASK:%x\n",tmp);
-	if(ioctl(simple,0x18,&tmp)<0){
-		perror("read SECONDARY");
-		exit(1);
-	}
-	printf("CR0 READ SHADOW:%x\n",tmp);
+	printf("Exception bitmap:%lx\n",*(contain->out_data));
+
+	free(contain);
+	contain = NULL;
 	return 0;
 }
