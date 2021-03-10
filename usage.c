@@ -48,6 +48,20 @@ int main()
 	}
 	printf("Exception bitmap:%lx\n",*(contain->out_data));
 
+	contain->field = CR0_GUEST_HOST_MASK;
+	if(ioctl(simple,VMREAD,contain) < 0){
+		perror("read CR0_GUEST_HOST_MASK");
+		exit(1);
+	}
+	printf("CR0_GUEST_HOST_MASK:%lx\n",*(contain->out_data));
+
+	contain->field = CR0_READ_SHADOW;
+	if(ioctl(simple,VMREAD,contain) < 0){
+		perror("read CR0_READ_SHADOW");
+		exit(1);
+	}
+	printf("CR0_READ_SHADOW:%lx\n",*(contain->out_data));
+
 	free(contain);
 	contain = NULL;
 	return 0;
